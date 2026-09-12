@@ -310,8 +310,9 @@
         <thead><tr><th style="text-align:left">Client</th><th style="text-align:left">State</th><th>Birthday rule</th><th>Extra Help</th><th>MSP</th><th>Medicaid</th><th>SSI</th><th style="text-align:left">Late enrollment penalty</th></tr></thead>
         <tbody id="bobBody"></tbody>
       </table></div>
-      <div class="btn-row" style="margin-top:1rem;">
+      <div class="btn-row" style="margin-top:1rem; align-items:center;">
         <button type="button" class="btn-ghost" id="bobExport">Download results as CSV</button>
+        <span class="foot-note" id="bobExportStatus" style="margin:0;"></span>
       </div>
       <div class="foot-note" style="margin-top:.9rem;">This is a screening pass, not a determination — the same caveats as the single-client tool below apply per row (SSA/state Medicaid make the real call), and a missing income or resources column just means that row's income-based checks are skipped rather than assumed to fail.</div>
     </div>
@@ -766,6 +767,16 @@
   }
 
   var $ = function(id){ return document.getElementById(id); };
+
+  // Resolve the platform "downloads" capability once, if this page is running inside a
+  // claude.ai artifact viewer that grants it. Resolves to null everywhere else (opened as a
+  // plain file, hosted on GitHub Pages/Netlify/etc., or an artifact viewer that hasn't granted
+  // it) — callers must fall back to a normal <a download> save in that case.
+  var downloadsCapPromise = (function(){
+    if (!window.claude || typeof window.claude.use !== "function") return Promise.resolve(null);
+    try { return window.claude.use("downloads").catch(function(){ return null; }); }
+    catch(e){ return Promise.resolve(null); }
+  })();
   var fmt = function(n){
     if(n === null || n === undefined || isNaN(n)) return "—";
     var neg = n < 0; n = Math.abs(n);
@@ -1557,6 +1568,17 @@
 
   $("bobFlaggedOnly").addEventListener("change", renderBobResults);
 
+  function legacyCsvDownload(csvText, filename){
+    // Plain browser download — used when the page isn't running inside a claude.ai artifact
+    // viewer (opened directly, or hosted on GitHub Pages/Netlify/etc.), where this works fine.
+    var blob = new Blob([csvText], { type:"text/csv" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   $("bobExport").addEventListener("click", function(){
     var header = ["Name","State","Birthday rule","Extra Help (LIS)","Medicare Savings Program","State Medicaid","SSI","Late enrollment penalty"];
     var lines = [header.join(",")];
@@ -1565,12 +1587,28 @@
         return '"' + String(v).replace(/"/g, '""') + '"';
       }).join(","));
     });
-    var blob = new Blob([lines.join("\n")], { type:"text/csv" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url; a.download = "book-of-business-results.csv";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    var csvText = lines.join("\n");
+    var filename = "book-of-business-results.csv";
+    var statusEl = $("bobExportStatus");
+    if (statusEl) statusEl.textContent = "";
+
+    downloadsCapPromise.then(function(downloads){
+      if (!downloads){ legacyCsvDownload(csvText, filename); return; }
+      downloads.save({ filename: filename, data: csvText }).then(function(){
+        if (statusEl) statusEl.textContent = "Saved.";
+      }, function(err){
+        var code = err && err.code;
+        if (code === "declined"){
+          // Viewer said no — nothing to report.
+        } else if (code === "rate_limited"){
+          if (statusEl) statusEl.textContent = "A save prompt is already open — try again in a moment.";
+        } else {
+          // Anything else (unavailable, capability_disabled, etc.) — fall back so the button
+          // still works rather than silently failing.
+          legacyCsvDownload(csvText, filename);
+        }
+      });
+    });
   });
 
   function renderAll(){ renderCosts(); renderCoverageFit(); renderEligibility(); renderSwitchFeasibility(); renderLEP(); renderIRMAA(); renderPlanLookup(); }
@@ -1614,6 +1652,7 @@
   renderAll();
 })();
 </script>
+
 
 
 </body></html>
