@@ -273,6 +273,50 @@
     </div>
   </details>
 
+  <section class="card" id="bobCard" style="margin-bottom:1.5rem;">
+    <h2><span class="swatch" style="background:var(--accent-strong); border-radius:50%;"></span> Book of business — bulk CSV check <span class="opt" style="font-weight:400;">(beta)</span></h2>
+    <p class="sub">Upload a client-list CSV — e.g. an export from Spark Advisors or any other CRM — to re-run the Oklahoma birthday-rule, late-enrollment-penalty, and income-based assistance checks across your whole book in one pass. Everything runs in this browser tab; nothing is uploaded anywhere.</p>
+
+    <div class="btn-row" style="margin-bottom:.9rem; align-items:center;">
+      <label class="btn-ghost" style="display:inline-flex; align-items:center; cursor:pointer; margin:0;">
+        Choose CSV file
+        <input type="file" id="bobFile" accept=".csv,text/csv" style="display:none;">
+      </label>
+      <span class="foot-note" id="bobFileName" style="align-self:center; margin:0;"></span>
+    </div>
+
+    <div id="bobMapWrap" hidden>
+      <p class="sub" style="margin-bottom:.6rem;">Match each field to a column from your file. Leave a field as "Not in this file" if your export doesn't have it — checks that need that data are simply skipped for those clients rather than guessed at.</p>
+      <div class="field-grid three" id="bobMapGrid"></div>
+      <div class="field" style="max-width:240px; margin-top:.9rem;">
+        <label for="bobDefaultState">Default state <span class="opt">(used for any row without a recognized state)</span></label>
+        <select id="bobDefaultState">
+          <option value="OK">Oklahoma</option>
+          <option value="TX">Texas</option>
+        </select>
+      </div>
+      <div class="btn-row" style="margin-top:1rem;">
+        <button type="button" class="btn-primary" id="bobRun">Run check</button>
+      </div>
+    </div>
+
+    <div id="bobResultsWrap" hidden>
+      <div class="foot-note" id="bobSummary" style="margin:1.1rem 0 .6rem; font-size:.85rem; color:var(--ink);"></div>
+      <label style="display:flex; align-items:center; gap:.4rem; margin-bottom:.6rem; font-size:.82rem; color:var(--ink-soft);">
+        <input type="checkbox" id="bobFlaggedOnly" checked style="width:auto;"> Show only clients with an action flag
+      </label>
+      <div class="scroll-hint">Swipe to see all columns →</div>
+      <div class="table-scroll"><table class="compare" id="bobTable">
+        <thead><tr><th style="text-align:left">Client</th><th style="text-align:left">State</th><th>Birthday rule</th><th>Extra Help</th><th>MSP</th><th>Medicaid</th><th>SSI</th><th style="text-align:left">Late enrollment penalty</th></tr></thead>
+        <tbody id="bobBody"></tbody>
+      </table></div>
+      <div class="btn-row" style="margin-top:1rem;">
+        <button type="button" class="btn-ghost" id="bobExport">Download results as CSV</button>
+      </div>
+      <div class="foot-note" style="margin-top:.9rem;">This is a screening pass, not a determination — the same caveats as the single-client tool below apply per row (SSA/state Medicaid make the real call), and a missing income or resources column just means that row's income-based checks are skipped rather than assumed to fail.</div>
+    </div>
+  </section>
+
   <form id="wb" class="board" autocomplete="off">
     <!-- LEFT: inputs -->
     <div class="col-inputs">
@@ -1257,6 +1301,276 @@
     var btn = e.target.closest(".lk-use");
     if(!btn) return;
     applyPlanToOption(btn.dataset.id, btn.dataset.target);
+  });
+
+  // ---- Book of business: bulk CSV check ----
+  // Reuses the same R / MEDIGAP constants and bandStatus() calculator as the single-client screen above,
+  // so bulk results never drift from a fresh single-client run — there's one source of truth for the figures.
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; });
+  }
+
+  var BOB_FIELDS = [
+    { key:"name", label:"Client name", hints:["clientname","name","first","last"] },
+    { key:"state", label:"State", hints:["state","st"] },
+    { key:"dob", label:"Date of birth", hints:["dob","dateofbirth","birthdate","birthday"] },
+    { key:"status", label:"Household status (individual / married)", hints:["maritalstatus","householdstatus","status"] },
+    { key:"income", label:"Gross monthly income", hints:["monthlyincome","grossincome","income"] },
+    { key:"resources", label:"Countable resources / assets", hints:["resources","assets","savings"] },
+    { key:"curtype", label:"Current coverage type", hints:["coveragetype","plantype","currentplan","curtype"] },
+    { key:"lepb", label:"Months without Part B", hints:["monthswithoutpartb","partbmonths","lepb"] },
+    { key:"lepd", label:"Months without creditable Part D", hints:["monthswithoutpartd","partdmonths","lepd"] }
+  ];
+  var bobRows = null;
+
+  function parseCSV(text){
+    var rows = [], row = [], field = "", inQuotes = false;
+    text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for(var i=0;i<text.length;i++){
+      var c = text[i];
+      if(inQuotes){
+        if(c === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; } }
+        else field += c;
+      } else if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ""; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ""; }
+      else field += c;
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    while(rows.length && rows[rows.length-1].length === 1 && rows[rows.length-1][0].trim() === "") rows.pop();
+    return rows;
+  }
+
+  function guessColumn(headers, hints){
+    for(var h=0; h<headers.length; h++){
+      var norm = headers[h].toLowerCase().replace(/[^a-z0-9]/g, "");
+      for(var k=0;k<hints.length;k++){ if(norm.indexOf(hints[k]) !== -1) return h; }
+    }
+    return -1;
+  }
+
+  function bobVal(row, mapping, key){
+    var idx = mapping[key];
+    if(idx === undefined || idx === -1 || idx >= row.length) return "";
+    return (row[idx] || "").trim();
+  }
+
+  function parseDOB(s){
+    if(!s) return null;
+    var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if(m){
+      var yr = m[3].length === 2 ? (2000 + parseInt(m[3],10)) : parseInt(m[3],10);
+      var d = new Date(yr, parseInt(m[1],10)-1, parseInt(m[2],10));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    var d2 = new Date(s);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
+
+  function normalizeCoverageType(s){
+    if(!s) return "";
+    var t = s.toLowerCase();
+    if(t.indexOf("medigap") !== -1 || t.indexOf("supplement") !== -1) return "medigap";
+    if(t.indexOf("advantage") !== -1 || t.indexOf("part c") !== -1 || /\bma\b/.test(t)) return "ma";
+    if(t.indexOf("part d") !== -1 || t.indexOf("pdp") !== -1 || t.indexOf("prescription") !== -1) return "pdp";
+    return "other";
+  }
+
+  function normalizeState(s){
+    if(!s) return "";
+    var t = s.toUpperCase();
+    if(t.indexOf("OKLA") !== -1 || t === "OK") return "OK";
+    if(t.indexOf("TEX") !== -1 || t === "TX") return "TX";
+    return "";
+  }
+
+  // Oklahoma Medigap birthday rule: 60 days starting on the client's birthday, applications accepted up to
+  // 30 days early. This recurs every year, so check this year's window plus the ones just before/after it
+  // in case "today" falls near a year boundary.
+  function birthdayWindowStatus(dob, today){
+    if(!dob) return { applicable:false, text:"Add DOB to check" };
+    var year = today.getFullYear();
+    function windowFor(y){
+      var bday = new Date(y, dob.getMonth(), dob.getDate());
+      var open = new Date(bday); open.setDate(open.getDate() - 30);
+      var close = new Date(bday); close.setDate(close.getDate() + 60);
+      return { open:open, close:close };
+    }
+    var candidates = [windowFor(year-1), windowFor(year), windowFor(year+1)];
+    for(var i=0;i<candidates.length;i++){
+      var w = candidates[i];
+      if(today >= w.open && today <= w.close){
+        var daysLeft = Math.round((w.close - today) / 86400000);
+        return { applicable:true, inWindow:true, text:"In window — " + daysLeft + " day" + (daysLeft===1?"":"s") + " left (closes " + w.close.toLocaleDateString() + ")" };
+      }
+    }
+    var next = candidates.filter(function(w){ return w.open > today; }).sort(function(a,b){ return a.open - b.open; })[0];
+    if(next){
+      var daysUntil = Math.round((next.open - today) / 86400000);
+      return { applicable:true, inWindow:false, text:"Opens in " + daysUntil + " day" + (daysUntil===1?"":"s") + " (" + next.open.toLocaleDateString() + ")" };
+    }
+    return { applicable:true, inWindow:false, text:"—" };
+  }
+
+  function evaluateBobRow(fields){
+    var state = fields.state || $("bobDefaultState").value;
+    var out = { name: fields.name || "(no name)", state: state };
+
+    if(state === "OK"){
+      var knownNonMedigap = fields.curtype && fields.curtype !== "medigap";
+      if(knownNonMedigap){
+        out.birthday = "N/A (not on Medigap)"; out.birthdayFlag = false;
+      } else {
+        var bw = birthdayWindowStatus(fields.dobDate, new Date());
+        out.birthday = bw.text + (bw.applicable && !fields.curtype ? " (confirm on Medigap)" : "");
+        out.birthdayFlag = !!bw.inWindow;
+      }
+    } else {
+      out.birthday = "N/A (Texas)"; out.birthdayFlag = false;
+    }
+
+    var hasIncome = fields.income !== "" && !isNaN(parseFloat(fields.income));
+    var monthlyIncome = hasIncome ? parseFloat(fields.income) : null;
+    var hasResources = fields.resources !== "" && !isNaN(parseFloat(fields.resources));
+    var resources = hasResources ? parseFloat(fields.resources) : null;
+    var married = fields.status === "married";
+
+    if(!hasIncome){
+      out.lis = "Needs income"; out.lisFlag = false;
+      out.msp = "Needs income"; out.mspFlag = false;
+      out.medicaid = "Needs income"; out.medicaidFlag = false;
+      out.ssi = "Needs income"; out.ssiFlag = false;
+    } else {
+      var annualIncome = monthlyIncome * 12;
+      var lisStatus = bandStatus(annualIncome, married ? R.lis.incM : R.lis.incI, resources, married ? R.lis.resM : R.lis.resI, hasResources);
+      out.lis = lisStatus === "good" ? "Qualifies" : lisStatus === "warn" ? "Close — verify" : lisStatus === "info" ? "Need resources" : "No";
+      out.lisFlag = lisStatus === "good" || lisStatus === "warn";
+
+      var mspResLimit = married ? R.msp.resM : R.msp.resI;
+      var mspTiers = [ {key:"qmb", label:"QMB"}, {key:"slmb", label:"SLMB"}, {key:"qi", label:"QI"} ];
+      var mspMatched = null;
+      for(var i=0;i<mspTiers.length;i++){
+        var lim = married ? R.msp[mspTiers[i].key].incM : R.msp[mspTiers[i].key].incI;
+        if(monthlyIncome <= lim){ mspMatched = { tier: mspTiers[i], limit: lim }; break; }
+      }
+      if(!mspMatched){
+        var qiLim = married ? R.msp.qi.incM : R.msp.qi.incI;
+        if(monthlyIncome <= qiLim * 1.10) mspMatched = { tier: mspTiers[2], limit: qiLim };
+      }
+      if(mspMatched){
+        var mspSt = bandStatus(monthlyIncome, mspMatched.limit, resources, mspResLimit, hasResources);
+        out.msp = mspMatched.tier.label + (mspSt === "warn" ? " — verify" : "");
+        out.mspFlag = mspSt === "good" || mspSt === "warn";
+      } else { out.msp = "No"; out.mspFlag = false; }
+
+      var md = R.medicaidABD[state === "TX" ? "TX" : "OK"];
+      var mdStatus = bandStatus(monthlyIncome, married ? md.incM : md.incI, resources, married ? md.resM : md.resI, hasResources);
+      out.medicaid = mdStatus === "good" ? "Qualifies" : mdStatus === "warn" ? "Close — verify" : "No";
+      out.medicaidFlag = mdStatus === "good" || mdStatus === "warn";
+
+      var countable = Math.max(0, monthlyIncome - R.ssi.genExclusion);
+      var ssiStatus = bandStatus(countable, married ? R.ssi.fbrM : R.ssi.fbrI, resources, married ? R.ssi.resM : R.ssi.resI, hasResources);
+      out.ssi = ssiStatus === "good" ? "Possible" : ssiStatus === "warn" ? "Close — verify" : "No";
+      out.ssiFlag = ssiStatus === "good" || ssiStatus === "warn";
+    }
+
+    var moB = parseFloat(fields.lepb); if(isNaN(moB) || moB < 0) moB = 0;
+    var moD = parseFloat(fields.lepd); if(isNaN(moD) || moD < 0) moD = 0;
+    var lepParts = [];
+    if(moB >= 12) lepParts.push("Part B +" + fmt2(Math.floor(moB/12) * 0.10 * R.partB.premium) + "/mo");
+    if(moD > 0) lepParts.push("Part D +" + fmt2(Math.round(moD * 0.01 * R.partD.nbbp * 10) / 10) + "/mo");
+    out.lep = lepParts.length ? lepParts.join(", ") : "—";
+    out.lepFlag = lepParts.length > 0;
+
+    out.anyFlag = out.birthdayFlag || out.lisFlag || out.mspFlag || out.medicaidFlag || out.ssiFlag || out.lepFlag;
+    return out;
+  }
+
+  $("bobFile").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    $("bobFileName").textContent = file.name;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var raw = parseCSV(String(ev.target.result));
+      if(!raw.length || raw.length < 2){ alert("That file looks empty, or has no data rows below the header."); return; }
+      bobRows = { headers: raw[0], rows: raw.slice(1).filter(function(r){ return r.some(function(c){ return c.trim() !== ""; }); }) };
+      renderBobMapper();
+    };
+    reader.readAsText(file);
+  });
+
+  function renderBobMapper(){
+    $("bobMapGrid").innerHTML = BOB_FIELDS.map(function(f){
+      var guess = guessColumn(bobRows.headers, f.hints);
+      var opts = "<option value=\"-1\">Not in this file</option>" + bobRows.headers.map(function(h, idx){
+        return "<option value=\"" + idx + "\"" + (idx === guess ? " selected" : "") + ">" + escapeHtml(h) + "</option>";
+      }).join("");
+      return "<div class='field'><label for='bobMap_" + f.key + "'>" + f.label + "</label><select id='bobMap_" + f.key + "'>" + opts + "</select></div>";
+    }).join("");
+    $("bobMapWrap").hidden = false;
+    $("bobResultsWrap").hidden = true;
+    $("bobRun").textContent = "Run check on " + bobRows.rows.length + " client" + (bobRows.rows.length === 1 ? "" : "s");
+  }
+
+  var bobResults = [];
+
+  $("bobRun").addEventListener("click", function(){
+    var mapping = {};
+    BOB_FIELDS.forEach(function(f){ var v = parseInt($("bobMap_" + f.key).value, 10); mapping[f.key] = isNaN(v) ? -1 : v; });
+
+    bobResults = bobRows.rows.map(function(r){
+      var fields = {
+        name: bobVal(r, mapping, "name"),
+        state: normalizeState(bobVal(r, mapping, "state")),
+        status: /marr/i.test(bobVal(r, mapping, "status")) ? "married" : "individual",
+        income: bobVal(r, mapping, "income").replace(/[$,]/g, ""),
+        resources: bobVal(r, mapping, "resources").replace(/[$,]/g, ""),
+        curtype: normalizeCoverageType(bobVal(r, mapping, "curtype")),
+        lepb: bobVal(r, mapping, "lepb"),
+        lepd: bobVal(r, mapping, "lepd")
+      };
+      fields.dobDate = parseDOB(bobVal(r, mapping, "dob"));
+      return evaluateBobRow(fields);
+    });
+
+    renderBobResults();
+  });
+
+  function bobFlagCell(text, flag){
+    return "<td>" + (flag ? "<span class='pill pill--good' style='white-space:normal;'>" + escapeHtml(text) + "</span>" : "<span style='color:var(--ink-faint);'>" + escapeHtml(text) + "</span>") + "</td>";
+  }
+
+  function renderBobResults(){
+    var onlyFlagged = $("bobFlaggedOnly").checked;
+    var flaggedCount = bobResults.filter(function(r){ return r.anyFlag; }).length;
+    var shown = onlyFlagged ? bobResults.filter(function(r){ return r.anyFlag; }) : bobResults;
+    $("bobSummary").textContent = flaggedCount + " of " + bobResults.length + " client" + (bobResults.length === 1 ? "" : "s") + " have at least one action flag" + (onlyFlagged && flaggedCount < bobResults.length ? " (showing flagged clients only)" : "") + ".";
+    $("bobBody").innerHTML = shown.map(function(r){
+      return "<tr><td style='text-align:left'>" + escapeHtml(r.name) + "</td><td style='text-align:left'>" + (r.state || "?") + "</td>" +
+        bobFlagCell(r.birthday, r.birthdayFlag) + bobFlagCell(r.lis, r.lisFlag) + bobFlagCell(r.msp, r.mspFlag) +
+        bobFlagCell(r.medicaid, r.medicaidFlag) + bobFlagCell(r.ssi, r.ssiFlag) +
+        "<td style='text-align:left'>" + escapeHtml(r.lep) + "</td></tr>";
+    }).join("") || "<tr><td colspan='8' style='text-align:center; color:var(--ink-faint)'>No clients match the current filter.</td></tr>";
+    $("bobResultsWrap").hidden = false;
+  }
+
+  $("bobFlaggedOnly").addEventListener("change", renderBobResults);
+
+  $("bobExport").addEventListener("click", function(){
+    var header = ["Name","State","Birthday rule","Extra Help (LIS)","Medicare Savings Program","State Medicaid","SSI","Late enrollment penalty"];
+    var lines = [header.join(",")];
+    bobResults.forEach(function(r){
+      lines.push([r.name, r.state, r.birthday, r.lis, r.msp, r.medicaid, r.ssi, r.lep].map(function(v){
+        return '"' + String(v).replace(/"/g, '""') + '"';
+      }).join(","));
+    });
+    var blob = new Blob([lines.join("\n")], { type:"text/csv" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "book-of-business-results.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   });
 
   function renderAll(){ renderCosts(); renderCoverageFit(); renderEligibility(); renderSwitchFeasibility(); renderLEP(); renderIRMAA(); renderPlanLookup(); }
