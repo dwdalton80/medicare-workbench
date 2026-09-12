@@ -1,5 +1,6 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 
+
 <title>Medicare Options Workbench</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1215,7 +1216,10 @@
   }
 
   function renderPlanLookup(){
-    if(!window.PLAN_DATA) return;
+    // PLAN_DATA is this closure's own local (from `var PLAN_DATA = JSON.parse(...)` above), never a
+    // window global — a `window.PLAN_DATA` guard here was always false, silently skipping this entire
+    // function (empty county dropdown, empty plan table, no "→ B"/"→ C" buttons) since day one.
+    if(!PLAN_DATA) return;
     ensureCountyOptions();
     var state = $("cState").value;
     var county = $("cCounty").value;
@@ -1325,12 +1329,12 @@
     { key:"name", label:"Client name", hints:["clientname","name","first","last"] },
     { key:"state", label:"State", hints:["state","st"] },
     { key:"dob", label:"Date of birth", hints:["dob","dateofbirth","birthdate","birthday"] },
-    { key:"status", label:"Household status (individual / married)", hints:["maritalstatus","householdstatus","status"] },
+    { key:"status", label:"Household status (individual / married)", hints:["maritalstatus","householdstatus","status","marital","married"] },
     { key:"income", label:"Gross monthly income", hints:["monthlyincome","grossincome","income"] },
     { key:"resources", label:"Countable resources / assets", hints:["resources","assets","savings"] },
-    { key:"curtype", label:"Current coverage type", hints:["coveragetype","plantype","currentplan","curtype"] },
-    { key:"lepb", label:"Months without Part B", hints:["monthswithoutpartb","partbmonths","lepb"] },
-    { key:"lepd", label:"Months without creditable Part D", hints:["monthswithoutpartd","partdmonths","lepd"] }
+    { key:"curtype", label:"Current coverage type", hints:["coveragetype","plantype","currentplan","curtype","coverage","currentcoverage"] },
+    { key:"lepb", label:"Months without Part B", hints:["monthswithoutpartb","partbmonths","lepb","nopartb"] },
+    { key:"lepd", label:"Months without creditable Part D", hints:["monthswithoutpartd","partdmonths","lepd","nopartd"] }
   ];
   var bobRows = null;
 
@@ -1400,6 +1404,9 @@
   // in case "today" falls near a year boundary.
   function birthdayWindowStatus(dob, today){
     if(!dob) return { applicable:false, text:"Add DOB to check" };
+    // Compare at midnight so "days left/until" counts whole calendar days regardless of what time
+    // of day this runs — otherwise a same-day fraction rounds the count down by one.
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     var year = today.getFullYear();
     function windowFor(y){
       var bday = new Date(y, dob.getMonth(), dob.getDate());
@@ -1652,7 +1659,6 @@
   renderAll();
 })();
 </script>
-
 
 
 </body></html>
