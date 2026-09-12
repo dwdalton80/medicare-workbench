@@ -2,6 +2,24 @@
 
 Dated history of substantive changes to the Medicare Options Workbench.
 
+## 2026-09-12 (later) — Rescoped to a pure assistance-eligibility screener
+
+Following an accuracy/functionality audit (below), the tool was rescoped at the requester's direction from a full cost-comparison + plan-lookup + underwriting workbench down to just an assistance-eligibility screener, kept alongside the CSV bulk checker:
+
+- **Removed:** the cost comparison (Option B/C annual cost estimate), the CMS Landscape plan lookup (county selector, embedded `PLAN_DATA` catalog, "→ B"/"→ C" plan-apply buttons), the IRMAA bracket lookup, the single-client late-enrollment-penalty calculator, and the underwriting/switch-feasibility check — along with the now-unused `Age` and `County` fields, `IRMAA`/`computeIRMAA`, and related CSS.
+- **Kept unchanged:** the single-client assistance-eligibility screen (Extra Help/LIS, MSP, state Medicaid ABD, SSI) and the entire "Book of business — bulk CSV check" card, including its own Oklahoma birthday-rule and late-enrollment-penalty math — neither was touched by this rescoping.
+- **Added:** a "What's the difference between these types of assistance?" panel explaining, in plain language, that Extra Help (federal, SSA, Part D only), MSP (state-administered but not full Medicaid, pays Medicare's own Part A/B costs), state Medicaid ABD (comprehensive coverage, tightest income limit), and SSI (federal cash benefit, not a Medicare program) are run by different agencies and cover different things — so a client can fail one and clearly pass another.
+- Verified after the cut: the `renderEligibility()` calculation function and the entire bulk-CSV code path are byte-for-byte unchanged from the pre-rescoping, audited version; a JS syntax check and an HTML tag-balance/dangling-id-reference check both passed clean.
+
+## 2026-09-12 — Accuracy and functionality audit
+
+A full audit of dollar figures, CMS plan data, and every interactive feature:
+
+- Verified every constant in `R` and the full IRMAA bracket table against SSA/CMS primary sources, and spot-checked 3 real CMS CY2026 Landscape File plan entries — all correct, no changes needed.
+- **Fixed a bug present since before this audit:** the CMS Landscape plan lookup's `renderPlanLookup()` checked `window.PLAN_DATA`, but `PLAN_DATA` was declared with `var` inside the page's top-level closure and was never a `window` property — the guard was always false, so the entire plan-lookup feature (county dropdown, plan table, "→ B"/"→ C") silently never ran. (This feature was subsequently removed entirely in the rescoping above.)
+- Fixed the CSV export button, which used a plain `<a download>` link that doesn't work in the claude.ai artifact viewer's sandbox — it now uses the platform's `downloads` capability when available, falling back to a classic blob download otherwise (e.g. when opened directly or hosted on GitHub Pages).
+- Extracted and ran the bulk-CSV logic (column guesser, CSV parser, DOB parser, birthday-rule window calculator, and the shared eligibility/LEP math) against a representative test file outside the browser, since the artifact viewer's sandboxed iframe blocks file-picker automation. Found and fixed two issues: the column auto-guesser only matched compound header names (`MaritalStatus`, `CoverageType`) and missed plausible plain ones (`Marital`, `Coverage`) — hints broadened for the status, coverage-type, and both late-enrollment-penalty columns; and the Oklahoma birthday-window day count could be off by one depending on the time of day the check ran, because "today" (with its current time) was diffed against a window boundary set to midnight — "today" is now normalized to midnight before the day-count math.
+
 ## 2026-09-12 — Book of business bulk CSV check
 
 Added a "Book of business — bulk CSV check" card so a whole client list can be screened in one pass instead of one client at a time:
@@ -15,7 +33,7 @@ Added a "Book of business — bulk CSV check" card so a whole client list can be
 
 ## Prior to 2026-09-12 — CMS Landscape plan lookup, and earlier feature rounds
 
-Before this entry, the tool had already grown a "CMS Landscape plan lookup" (Section 3 of the form): a county selector plus an embedded CY2026 CMS Medicare Advantage & Part D Landscape File dataset, letting a broker search and pull a real plan's premium, MOOP, deductible, and star rating directly into Option B or C with one click. It had also already accumulated: an IRMAA bracket lookup (auto-fills the Part B premium override and Part D surcharge from filing status + MAGI, including the married-filing-separately-lived-apart exception), a late-enrollment penalty calculator (Part B and Part D, matching Medicare.gov's own worked examples), a mobile-responsive layout pass, and the initial accuracy audit that fixed the Medicare Savings Program tier-matching logic and a borderline-income status bug. See the in-app "2026 program thresholds" panel for the current sourcing on every dollar figure in use.
+Before this entry, the tool had already grown a "CMS Landscape plan lookup" (Section 3 of the form): a county selector plus an embedded CY2026 CMS Medicare Advantage & Part D Landscape File dataset, letting a broker search and pull a real plan's premium, MOOP, deductible, and star rating directly into Option B or C with one click. It had also already accumulated: an IRMAA bracket lookup (auto-fills the Part B premium override and Part D surcharge from filing status + MAGI, including the married-filing-separately-lived-apart exception), a late-enrollment penalty calculator (Part B and Part D, matching Medicare.gov's own worked examples), a mobile-responsive layout pass, and the initial accuracy audit that fixed the Medicare Savings Program tier-matching logic and a borderline-income status bug. (The cost comparison, plan lookup, IRMAA lookup, and single-client late-enrollment-penalty calculator described here were removed in the 2026-09-12 rescoping above; the bulk CSV check's own late-enrollment-penalty math was not affected.) See the in-app "2026 program thresholds" panel for the current sourcing on every dollar figure in use.
 
 ## 2026 figures reference
 
@@ -46,4 +64,4 @@ Before this entry, the tool had already grown a "CMS Landscape plan lookup" (Sec
 | IRMAA tier 1 Part B / Part D | $284.10 / $14.50 | CMS |
 | IRMAA top tier Part B / Part D | $689.90 / $91.00 | CMS |
 
-**Caveats:** Medicaid ABD, MSP, and SSI figures are simplified single-pathway screens — real state Medicaid programs have more routes to eligibility (spend-downs, medically-needy pathways) than a single income/resource line captures. IRMAA is based on MAGI from **two years prior** to the plan year. All figures current as of the last update noted above; reverify against CMS/SSA/state sources each fall.
+**Caveats:** Medicaid ABD, MSP, and SSI figures are simplified single-pathway screens — real state Medicaid programs have more routes to eligibility (spend-downs, medically-needy pathways) than a single income/resource line captures. The IRMAA figures above are retained for reference even though the in-app IRMAA lookup was removed on 2026-09-12 — IRMAA is based on MAGI from **two years prior** to the plan year. All figures current as of the last update noted above; reverify against CMS/SSA/state sources each fall.
