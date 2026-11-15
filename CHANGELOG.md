@@ -2,6 +2,24 @@
 
 Dated history of substantive changes to the Medicare Options Workbench.
 
+## 2026-11-15 — 2027 figures where published
+
+Loaded every 2027 figure CMS and SSA had published as of November 15, 2026. Calculation logic is unchanged; only constants, labels and source links moved.
+
+| Figure | 2026 | 2027 | Source |
+|---|---|---|---|
+| Part D deductible (max) | $615 | $700 | CMS CY2027 Rate Announcement |
+| Part D out-of-pocket threshold | $2,100 | $2,400 | CMS CY2027 Rate Announcement |
+| Part D base beneficiary premium | $38.99 | $41.33 | CMS 2027 NAMBA fact sheet (Jul 28, 2026) |
+| Extra Help resource limit (incl. $1,500 burial), individual / married | $18,090 / $36,100 | $18,710 / $37,340 | CMS CY2027 LIS resource limits memo (Nov 5, 2026) |
+| SSI federal benefit rate, individual / couple | $994 / $1,491 | $1,029 / $1,544 | SSA 2027 COLA fact sheet |
+| Texas ABD Medicaid income line (tracks SSI), individual / married | $994 / $1,491 | $1,029 / $1,544 | follows SSI above |
+
+- **Still 2026:** Part A/B premiums and deductibles (CMS hadn't announced 2027 yet); every income limit for Extra Help, the Medicare Savings Programs and Oklahoma ABD Medicaid (these follow the 2027 federal poverty guidelines, due early 2027); Medicare Savings Program resource limits.
+- Added a `Y` object recording the year of each figure group; the thresholds panel now tags every row with its year, and the header badge and panel title say the figures are mixed.
+- The Part D late-enrollment penalty in the bulk CSV check now uses the 2027 base beneficiary premium. The base premium now shows with cents in the thresholds panel.
+- Verified: JS syntax check, and the script run against a stub DOM to confirm the thresholds panel and eligibility screen render with the new values.
+
 ## 2026-09-12 (later) — Rescoped to a pure assistance-eligibility screener
 
 Following an accuracy/functionality audit (below), the tool was rescoped at the requester's direction from a full cost-comparison + plan-lookup + underwriting workbench down to just an assistance-eligibility screener, kept alongside the CSV bulk checker:

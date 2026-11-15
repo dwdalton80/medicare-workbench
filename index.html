@@ -222,17 +222,21 @@
       <h1>Medicare Options Workbench</h1>
       <p>Screen a client for Extra Help (Part D Low-Income Subsidy), Medicare Savings Programs (QMB/SLMB/QI), state ABD Medicaid, and SSI — one at a time, or a whole book of business at once via CSV.</p>
     </div>
-    <div class="year-badge"><span class="dot"></span> Figures reflect <b>plan year 2026</b> — verify against SSA/CMS before quoting a client</div>
+    <div class="year-badge"><span class="dot"></span> <span><b>2027</b> figures where CMS/SSA have published them, <b>2026</b> elsewhere (see thresholds) — verify before quoting a client</span></div>
   </header>
 
   <details class="thresholds">
-    <summary>2026 program thresholds used by this tool <span class="chev">▸</span></summary>
+    <summary>Program thresholds used by this tool — 2027 where published, 2026 otherwise <span class="chev">▸</span></summary>
     <div class="thresholds-body">
+      <p class="sub" style="margin:.9rem 0 0;">Each figure is tagged with its year. 2027 figures apply to coverage and applications from January 1, 2027. Still on 2026 as of November 15, 2026: Part A/B premiums and deductibles (CMS hasn't announced 2027 yet), and every income limit for Extra Help, the Medicare Savings Programs, and Oklahoma ABD Medicaid (these follow the 2027 federal poverty guidelines, due early 2027), plus Medicare Savings Program resource limits.</p>
       <div class="thresh-grid" id="threshGrid"></div>
       <div class="sources">
         Sources: <a href="https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles" target="_blank" rel="noopener">CMS — 2026 Part A/B premiums &amp; deductibles</a> ·
         <a href="https://www.medicare.gov/health-drug-plans/part-d/basics/costs" target="_blank" rel="noopener">Medicare.gov — 2026 Part D deductible &amp; OOP cap</a> ·
-        <a href="https://www.cms.gov/files/document/july-28-2025-parts-c-d-announcement.pdf" target="_blank" rel="noopener">CMS — 2026 Part D national base beneficiary premium ($38.99)</a> ·
+        <a href="https://www.cms.gov/files/document/2027-announcement.pdf" target="_blank" rel="noopener">CMS — CY2027 Rate Announcement (2027 Part D deductible $700, OOP threshold $2,400)</a> ·
+        <a href="https://www.cms.gov/newsroom/fact-sheets/medicare-part-d-2027-national-average-monthly-bid-amount-information" target="_blank" rel="noopener">CMS — 2027 Part D base beneficiary premium ($41.33)</a> ·
+        <a href="https://www.cms.gov/files/document/cy2026-lis-resource-limits-memo.pdf" target="_blank" rel="noopener">CMS — CY2027 Extra Help resource limits memo (Nov 5, 2026)</a> ·
+        <a href="https://www.ssa.gov/news/en/cola/factsheets/2027.html" target="_blank" rel="noopener">SSA — 2027 COLA fact sheet (SSI $1,029 / $1,544)</a> ·
         <a href="https://www.medicare.gov/basics/costs/medicare-costs/avoid-penalties" target="_blank" rel="noopener">Medicare.gov — late enrollment penalty formulas</a> ·
         <a href="https://www.medicare.gov/basics/costs/help/drug-costs" target="_blank" rel="noopener">Medicare.gov — Extra Help limits</a> ·
         <a href="https://www.medicare.gov/basics/costs/help/medicare-savings-programs" target="_blank" rel="noopener">Medicare.gov — Medicare Savings Program limits</a> ·
@@ -386,23 +390,26 @@
 (function(){
   "use strict";
 
-  // ---- 2026 constants (update each fall when SSA/CMS release next year's figures) ----
+  // ---- Program constants (update each fall/winter as SSA/CMS release next year's figures) ----
+  // Updated Nov 15, 2026: 2027 values loaded where CMS/SSA have published them; the rest are still 2026.
+  // Y records the year of each group so the thresholds panel can label it.
+  var Y = { partB: 2026, partA: 2026, partD: 2027, lisInc: 2026, lisRes: 2027, mspInc: 2026, mspRes: 2026, ssi: 2027, abdOK: 2026, abdTX: 2027 };
   var R = {
-    year: 2026,
-    partB: { premium: 202.90, deductible: 283 },
-    partA: { deductible: 1736 },
-    partD: { deductible: 615, moopCap: 2100, nbbp: 38.99 }, // nbbp = national base beneficiary premium, used for the Part D late-enrollment penalty
-    lis: { incI: 23940, incM: 32460, resI: 18090, resM: 36100 }, // annual income, resources
+    year: 2027,
+    partB: { premium: 202.90, deductible: 283 },          // 2026 — 2027 not yet announced
+    partA: { deductible: 1736 },                         // 2026 — 2027 not yet announced
+    partD: { deductible: 700, moopCap: 2400, nbbp: 41.33 }, // 2027 (CY2027 Rate Announcement; nbbp from CMS 2027 NAMBA fact sheet). nbbp = national base beneficiary premium, used for the Part D late-enrollment penalty
+    lis: { incI: 23940, incM: 32460, resI: 18710, resM: 37340 }, // annual income (2026, awaits 2027 FPL); resources incl. $1,500 burial allowance (2027, CMS LIS memo Nov 5, 2026)
     msp: {
       qmb:  { incI: 1350, incM: 1824 },
       slmb: { incI: 1616, incM: 2184 },
       qi:   { incI: 1816, incM: 2455 },
-      resI: 9950, resM: 14910
+      resI: 9950, resM: 14910                                // 2026 — income awaits 2027 FPL
     },
-    ssi: { fbrI: 994, fbrM: 1491, resI: 2000, resM: 3000, genExclusion: 20 },
+    ssi: { fbrI: 1029, fbrM: 1544, resI: 2000, resM: 3000, genExclusion: 20 }, // 2027 (SSA 2027 COLA fact sheet)
     medicaidABD: {
-      OK: { name: "SoonerCare (Oklahoma Medicaid)", incI: 1350, incM: 1824, resI: 9950, resM: 14910 },
-      TX: { name: "Texas Medicaid", incI: 994, incM: 1491, resI: 2000, resM: 3000 }
+      OK: { name: "SoonerCare (Oklahoma Medicaid)", incI: 1350, incM: 1824, resI: 9950, resM: 14910 }, // 2026 — 100% FPL, awaits 2027 FPL
+      TX: { name: "Texas Medicaid", incI: 1029, incM: 1544, resI: 2000, resM: 3000 }                    // 2027 — tracks the SSI federal benefit rate
     }
   };
 
@@ -466,34 +473,39 @@
   };
   var num = function(id, def){ var v = parseFloat($(id).value); return isNaN(v) ? (def||0) : v; };
 
+  function yr(y){
+    return ' <span style="font:600 .66rem/1 \'Public Sans\',sans-serif; letter-spacing:.03em; padding:.12rem .32rem; border-radius:4px; margin-left:.25rem; vertical-align:middle; ' +
+      (y === 2027 ? 'background:var(--accent-soft); color:var(--accent-strong);' : 'background:var(--warn-soft); color:var(--warn);') + '">' + y + '</span>';
+  }
+
   function renderThresholds(){
     var g = $("threshGrid");
     g.innerHTML =
       '<div class="thresh-card"><h4>Part A / B</h4>'+
-        '<div><span>Part B premium</span><span class="num">'+fmt(R.partB.premium)+'/mo</span></div>'+
-        '<div><span>Part B deductible</span><span class="num">'+fmt(R.partB.deductible)+'</span></div>'+
-        '<div><span>Part A deductible</span><span class="num">'+fmt(R.partA.deductible)+'</span></div></div>'+
+        '<div><span>Part B premium'+yr(Y.partB)+'</span><span class="num">'+fmt(R.partB.premium)+'/mo</span></div>'+
+        '<div><span>Part B deductible'+yr(Y.partB)+'</span><span class="num">'+fmt(R.partB.deductible)+'</span></div>'+
+        '<div><span>Part A deductible'+yr(Y.partA)+'</span><span class="num">'+fmt(R.partA.deductible)+'</span></div></div>'+
       '<div class="thresh-card"><h4>Part D standard</h4>'+
-        '<div><span>Deductible (max)</span><span class="num">'+fmt(R.partD.deductible)+'</span></div>'+
-        '<div><span>True OOP cap</span><span class="num">'+fmt(R.partD.moopCap)+'</span></div>'+
-        '<div><span>Base beneficiary premium</span><span class="num">'+fmt(R.partD.nbbp)+'</span></div></div>'+
+        '<div><span>Deductible (max)'+yr(Y.partD)+'</span><span class="num">'+fmt(R.partD.deductible)+'</span></div>'+
+        '<div><span>True OOP cap'+yr(Y.partD)+'</span><span class="num">'+fmt(R.partD.moopCap)+'</span></div>'+
+        '<div><span>Base beneficiary premium'+yr(Y.partD)+'</span><span class="num">'+fmt2(R.partD.nbbp)+'</span></div></div>'+
       '<div class="thresh-card"><h4>Extra Help (LIS)</h4>'+
-        '<div><span>Income, individual</span><span class="num">'+fmt(R.lis.incI)+'/yr</span></div>'+
-        '<div><span>Income, married</span><span class="num">'+fmt(R.lis.incM)+'/yr</span></div>'+
-        '<div><span>Resources, individual</span><span class="num">'+fmt(R.lis.resI)+'</span></div>'+
-        '<div><span>Resources, married</span><span class="num">'+fmt(R.lis.resM)+'</span></div></div>'+
+        '<div><span>Income, individual'+yr(Y.lisInc)+'</span><span class="num">'+fmt(R.lis.incI)+'/yr</span></div>'+
+        '<div><span>Income, married'+yr(Y.lisInc)+'</span><span class="num">'+fmt(R.lis.incM)+'/yr</span></div>'+
+        '<div><span>Resources, individual'+yr(Y.lisRes)+'</span><span class="num">'+fmt(R.lis.resI)+'</span></div>'+
+        '<div><span>Resources, married'+yr(Y.lisRes)+'</span><span class="num">'+fmt(R.lis.resM)+'</span></div></div>'+
       '<div class="thresh-card"><h4>Medicare Savings Pgms</h4>'+
-        '<div><span>QMB, individual</span><span class="num">'+fmt(R.msp.qmb.incI)+'/mo</span></div>'+
-        '<div><span>SLMB, individual</span><span class="num">'+fmt(R.msp.slmb.incI)+'/mo</span></div>'+
-        '<div><span>QI, individual</span><span class="num">'+fmt(R.msp.qi.incI)+'/mo</span></div>'+
-        '<div><span>Resources, individual</span><span class="num">'+fmt(R.msp.resI)+'</span></div></div>'+
+        '<div><span>QMB, individual'+yr(Y.mspInc)+'</span><span class="num">'+fmt(R.msp.qmb.incI)+'/mo</span></div>'+
+        '<div><span>SLMB, individual'+yr(Y.mspInc)+'</span><span class="num">'+fmt(R.msp.slmb.incI)+'/mo</span></div>'+
+        '<div><span>QI, individual'+yr(Y.mspInc)+'</span><span class="num">'+fmt(R.msp.qi.incI)+'/mo</span></div>'+
+        '<div><span>Resources, individual'+yr(Y.mspRes)+'</span><span class="num">'+fmt(R.msp.resI)+'</span></div></div>'+
       '<div class="thresh-card"><h4>SSI</h4>'+
-        '<div><span>Benefit rate, individual</span><span class="num">'+fmt(R.ssi.fbrI)+'/mo</span></div>'+
-        '<div><span>Benefit rate, married</span><span class="num">'+fmt(R.ssi.fbrM)+'/mo</span></div>'+
-        '<div><span>Resources, individual</span><span class="num">'+fmt(R.ssi.resI)+'</span></div></div>'+
+        '<div><span>Benefit rate, individual'+yr(Y.ssi)+'</span><span class="num">'+fmt(R.ssi.fbrI)+'/mo</span></div>'+
+        '<div><span>Benefit rate, married'+yr(Y.ssi)+'</span><span class="num">'+fmt(R.ssi.fbrM)+'/mo</span></div>'+
+        '<div><span>Resources, individual'+yr(Y.ssi)+'</span><span class="num">'+fmt(R.ssi.resI)+'</span></div></div>'+
       '<div class="thresh-card"><h4>ABD Medicaid</h4>'+
-        '<div><span>Oklahoma, individual</span><span class="num">'+fmt(R.medicaidABD.OK.incI)+'/mo</span></div>'+
-        '<div><span>Texas, individual</span><span class="num">'+fmt(R.medicaidABD.TX.incI)+'/mo</span></div></div>'+
+        '<div><span>Oklahoma, individual'+yr(Y.abdOK)+'</span><span class="num">'+fmt(R.medicaidABD.OK.incI)+'/mo</span></div>'+
+        '<div><span>Texas, individual'+yr(Y.abdTX)+'</span><span class="num">'+fmt(R.medicaidABD.TX.incI)+'/mo</span></div></div>'+
       '<div class="thresh-card"><h4>Medigap switching</h4>'+
         '<div><span>Oklahoma</span><span class="num" style="font-size:.74rem">'+MEDIGAP.OK.short+'</span></div>'+
         '<div><span>Texas</span><span class="num" style="font-size:.74rem">'+MEDIGAP.TX.short+'</span></div></div>';
@@ -937,4 +949,5 @@
   renderAll();
 })();
 </script>
+
 </body></html>

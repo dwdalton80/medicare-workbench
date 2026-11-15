@@ -80,7 +80,7 @@ var R = {
 
 Each fall (figures are usually announced by CMS/SSA in September–November for the coming plan year):
 
-1. Update `year` and every dollar figure in `R` against the current sources listed in the in-app "2026 program thresholds" panel — primarily CMS.gov, Medicare.gov, and SSA.gov.
+1. Update `year` and every dollar figure in `R` against the current sources listed in the in-app "Program thresholds" panel — primarily CMS.gov, Medicare.gov, and SSA.gov. Update the matching entry in `Y` so the panel labels each figure with the right year.
 2. Update the source links inside the `<details class="thresholds">` block if any of them change URLs.
 3. Spot-check the `MEDIGAP` object (Oklahoma birthday rule, Texas's lack of one) — state law changes far less often than federal dollar amounts, but it's worth a periodic recheck since the bulk CSV check's birthday-rule flag depends on it.
 4. Test a few known scenarios in a browser before relying on it with a real client — see [Testing](#testing-changes) below.
@@ -102,7 +102,7 @@ There's no automated test suite (it's a static form-driven tool), so after any c
 - **Not covered:** QDWI (a narrow Part-A-only MSP for people under 65), and non-Medicare programs like SNAP or LIHEAP.
 - **The book of business CSV check is a bulk screen, not a bulk determination** — it applies the same simplified math as the single-client form to every row, so the same caveats apply per client, multiplied by the size of the file. Treat the flagged list as a call list to verify, not a finished eligibility determination.
 - **Nothing here replaces Scope of Appointment / TPMO compliance requirements** before an enrollment conversation.
-- All figures are for **plan year 2026** as of the last update — see [CHANGELOG.md](CHANGELOG.md) for sourcing and audit history.
+- Figures are a mix of **2027** (where CMS/SSA had published them) and **2026** as of the last update — each one is labeled with its year in the in-app thresholds panel, and the `Y` object next to `R` records which year each group uses. See [CHANGELOG.md](CHANGELOG.md) for sourcing and audit history.
 
 ## License / usage
 
